@@ -404,7 +404,7 @@ def apply_xai_to_model(model_name, model, X_train, X_test, y_train, pca, feature
 # Main Execution
 def main():
     print("Starting EEG Stress Analysis Pipeline")
-    data_path = r"C:\Users\Raymo\OneDrive\Desktop\Sunway Uni\Classes\Cp2\CodesProject\EEG Stress Project\Data\Data mat\Data\filtered_data"
+    data_path = r"(path to filtered_data)...\Data\filtered_data"
     train_data, train_labels, test_data, test_labels = load_eeg_data(data_path)
     train_features, train_epoch_labels, feature_names = extract_features(train_data, train_labels, dataset_type="training")
     test_features, test_epoch_labels, _ = extract_features(test_data, test_labels, dataset_type="testing")
