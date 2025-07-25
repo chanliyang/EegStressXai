@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jul 24 10:44:10 2025
+Created on Fri Jul 25 10:51:08 2025
 
 @author: Raymo
 """
+
 import os
 import numpy as np
 import scipy.io
@@ -241,11 +242,11 @@ def train_and_evaluate(X_train, y_train, X_test, y_test, feature_names, n_compon
             'params': {'n_estimators': [50, 100, 200], 'max_depth': [3, 5, 7], 'learning_rate': [0.01, 0.1, 0.3]}
          },
     }
-    results, accuracies = {}, {}
+    
+    results, f1_scores, accuracies, precisions, recalls = {}, {}, {}, {}, {}
     class_names = ['Not Stress', 'Stress']
     
-    # --- Visualization 5: Model Decision Boundaries ---
-    print(f"\nVisualizing model decision boundaries for PCA_{pca_x+1} vs PCA_{pca_y+1}")
+    # --- Visualization 5: Performance Metrics & Model Decision Boundaries---
     x_min, x_max = X_train_scaled[:, pca_x].min() - 1, X_train_scaled[:, pca_x].max() + 1
     y_min, y_max = X_train_scaled[:, pca_y].min() - 1, X_train_scaled[:, pca_y].max() + 1
     xx, yy = np.meshgrid(np.linspace(x_min, x_max, 100), np.linspace(y_min, y_max, 100))
@@ -255,30 +256,50 @@ def train_and_evaluate(X_train, y_train, X_test, y_test, feature_names, n_compon
         grid = GridSearchCV(config['model'], config['params'], cv=5, n_jobs=-1)
         grid.fit(X_train_scaled, y_train)
         y_pred = grid.best_estimator_.predict(X_test_scaled)
+        
+        # Performance Metrics
+        cm = confusion_matrix(y_test, y_pred)
         accuracy = accuracy_score(y_test, y_pred)
+        precision = precision_score(y_test, y_pred)
+        recall = recall_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred)
+        
+        f1_scores[name] = f1
         accuracies[name] = accuracy
+        precisions[name] = precision
+        recalls[name] = recall
         results[name] = {
             'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'f1-score': f1,
             'best_params': grid.best_params_,
             'best_estimator': grid.best_estimator_
         }
  
-        # Performance Metrics
-        cm = confusion_matrix(y_test, y_pred)
-        precision = precision_score(y_test, y_pred)
-        recall = recall_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred)
         print(f"{name}")
-        print(f"Accuracy: {accuracy*100:.2f}%")
         print("Confusion Matrix:")
         print("\t\tPredicted Stress\tPredicted Not Stress")
-        print(f"Actual Stress\t{cm[1,1]}\t\t{cm[1,0]}")
-        print(f"Actual Not Stress\t{cm[0,1]}\t\t{cm[0,0]}")
+        print(f"Actual Stress\t{cm[0,0]}\t\t{cm[0,1]}")
+        print(f"Actual Not Stress\t{cm[1,0]}\t\t{cm[1,1]}")
+        
+        # Plot Confusion Matrix
+        print(f"Visualizing confusion matrix for {name}")
+        plt.figure(figsize=(6, 5))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
+        plt.xlabel('Predicted')
+        plt.ylabel('Actual')
+        plt.title(f'Confusion Matrix for {name}', fontsize=14)
+        plt.tight_layout()
+        plt.show()
+                
+        print(f"Accuracy: {accuracy:.4f}")
         print(f"Precision: {precision:.4f}")
         print(f"Recall: {recall:.4f}")
         print(f"F1-score: {f1:.4f} \n")
         
         # Plot decision boundary for PCA_x vs PCA_y
+        print(f"\nVisualizing model decision boundaries for PCA_{pca_x+1} vs PCA_{pca_y+1}")
         plt.figure(figsize=(10, 6))
         Z = grid.best_estimator_.predict(np.c_[xx.ravel(), yy.ravel(), np.zeros((xx.ravel().shape[0], n_components-2))])
         Z = Z.reshape(xx.shape)
@@ -310,19 +331,22 @@ def train_and_evaluate(X_train, y_train, X_test, y_test, feature_names, n_compon
         # Apply XAI to the current model using PCA-transformed data
         apply_xai_to_model(name, grid.best_estimator_, X_train_scaled, X_test_scaled, y_train, pca, feature_names, class_names, n_components)
     
-    # Plot accuracies
-    print("Step 6: Plotting model accuracy comparison")
-    plt.figure(figsize=(10, 6))
-    bars = plt.bar(accuracies.keys(), accuracies.values(), color=['#1f77b4', '#2ca02c', '#ff7f0e', '#d62728', '#9467bd', '#8c564b'])
-    plt.xlabel('Model', fontsize=12)
-    plt.ylabel('Accuracy', fontsize=12)
-    plt.title('Model Accuracy Comparison', fontsize=14, pad=15)
-    plt.ylim(0, 1)
-    for bar in bars:
-        yval = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width()/2, yval + 0.02, f"{yval:.4f}", ha='center', fontsize=10)
-    plt.tight_layout()
-    plt.show()
+    # Plot comparison of all metrics
+    print("Step 6: Plotting model performance metrics comparison")
+    metrics = {'F1-Score': f1_scores, 'Accuracy': accuracies, 'Precision': precisions, 'Recall': recalls}
+    for metric_name, metric_values in metrics.items():
+        plt.figure(figsize=(10, 6))
+        bars = plt.bar(metric_values.keys(), metric_values.values(), 
+                       color=['#1f77b4', '#2ca02c', '#ff7f0e', '#d62728', '#9467bd', '#8c564b'])
+        plt.xlabel('Model', fontsize=12)
+        plt.ylabel(metric_name, fontsize=12)
+        plt.title(f'Model {metric_name} Comparison', fontsize=14, pad=15)
+        plt.ylim(0, 1)
+        for bar in bars:
+            yval = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width()/2, yval + 0.02, f"{yval:.4f}", ha='center', fontsize=10)
+        plt.tight_layout()
+        plt.show()
     
     return results
 #---------------------------------------------XAI-----------------------------------------------
@@ -386,15 +410,16 @@ def main():
     test_features, test_epoch_labels, _ = extract_features(test_data, test_labels, dataset_type="testing")
     
     # Specify which PCA components to use for visualizations
-    pca_x = 5 #PCA_1   
-    pca_y = 8 #PCA_2
+    pca_x = 0 #PCA_1   
+    pca_y = 1 #PCA_2
     
     results = train_and_evaluate(train_features, train_epoch_labels, test_features, test_epoch_labels, 
                                  feature_names, n_components=25, pca_x=pca_x, pca_y=pca_y)
     
     print("\nStep 7: Final Results")
     for model_name, result in results.items():
-        print(f"{model_name} Accuracy: {result['accuracy']:.4f}, Best Params: {result['best_params']}")
+        print(f"{model_name} Accuracy: {result['accuracy']:.4f}, Precision: {result['precision']:.4f}, "
+      f"Recall: {result['recall']:.4f}, F1-Score: {result['f1-score']:.4f}, Best Params: {result['best_params']}")
     print("Analysis completed!")
 
 if __name__ == "__main__":
